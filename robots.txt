@@ -1,3 +1,116 @@
-# https://www.robotstxt.org/robotstxt.html
-User-agent: *
-Disallow:
+    const { values, setValue } = useUrlParam([
+        {
+            paramName: 'dateFrom',
+            defaultValue: format(new Date(), 'yyyy-MM-dd'),
+            formatValue: (value: unknown) => {
+                if (value instanceof Date) {
+                    return format(value, 'yyyy-MM-dd');
+                }
+                return String(value);
+            }
+        },
+        {
+            paramName: 'dateTo',
+            defaultValue: format(new Date(), 'yyyy-MM-dd'),
+            formatValue: (value: unknown) => {
+                if (value instanceof Date) {
+                    return format(value, 'yyyy-MM-dd');
+                }
+                return String(value);
+            }
+        },
+        {
+            paramName: 'listId',
+            defaultValue: '1'
+        }
+    ]);
+    
+    const gridRef = useRef<DataGrid>(null);
+    const prevDateRef = useRef<string | null>(null);
+    const { filters, handleFilterValueChange } = useDataGridFilters();
+    const { data: reports, isLoading, error, errorDetails, execute } = useDataGridRequest<Report[]>();
+
+    useEffect(() => {
+        if (prevDateRef.current === values.dateFrom) return;
+
+        execute(() => getReports(values.dateFrom || '', values.dateTo || '', values.listId || ''));
+        prevDateRef.current = values.dateFrom || null;
+    }, [values.dateFrom, values.dateTo, values.listId, execute]);
+
+    const handleDateFromChange = (e: ValueChangedEvent): void => {
+        if (e.value) {
+            setValue('dateFrom', e.value);
+        }
+    };
+
+    const handleDateToChange = (e: ValueChangedEvent): void => {
+        if (e.value) {
+            setValue('dateTo', e.value);
+        }
+    };
+
+    const handleListIdChange = (e: SelectValueChangedEvent): void => {
+        if (e.value) {
+            setValue('listId', e.value);
+        }
+    };
+
+---------------------------------------------
+
+import { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+
+interface UrlParamConfig {
+    paramName: string;
+    defaultValue?: string;
+    formatValue?: (value: unknown) => string;
+}
+
+interface UseUrlParamReturn {
+    values: Record<string, string | null | undefined>;
+    setValue: (paramName: string, value: unknown) => void;
+    searchParams: URLSearchParams;
+    setSearchParams: (params: URLSearchParams) => void;
+}
+
+export const useUrlParam = (params: UrlParamConfig[]): UseUrlParamReturn => {
+    const [searchParams, setSearchParams] = useSearchParams();
+    
+    const values = params.reduce((acc, { paramName, defaultValue }) => {
+        acc[paramName] = searchParams.get(paramName) || defaultValue;
+        return acc;
+    }, {} as Record<string, string | null | undefined>);
+
+    useEffect(() => {
+        const newParams = new URLSearchParams(searchParams);
+        let hasChanges = false;
+
+        params.forEach(({ paramName, defaultValue }) => {
+            if (!searchParams.get(paramName) && defaultValue) {
+                newParams.set(paramName, defaultValue);
+                hasChanges = true;
+            }
+        });
+
+        if (hasChanges) {
+            setSearchParams(newParams);
+        }
+    }, [params, searchParams, setSearchParams]);
+
+    const setValue = (paramName: string, value: unknown): void => {
+        const paramConfig = params.find(p => p.paramName === paramName);
+        if (!paramConfig) return;
+
+        const formattedValue = paramConfig.formatValue ? paramConfig.formatValue(value) : String(value);
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set(paramName, formattedValue);
+        setSearchParams(newParams);
+    };
+
+    return {
+        values,
+        setValue,
+        searchParams,
+        setSearchParams
+    };
+}; 
